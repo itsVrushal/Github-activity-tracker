@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activity arcade: any GitHub username, their recent public events</title>
+  <meta name="description" content="Type a GitHub username, press fetch, and see their recent public events — pushes, stars, pull requests, issues and releases — up to GitHub's 90-day memory.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chivo:wght@400;700;900&family=Silkscreen:wght@700&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23261a2e'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%23e2652c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="static/styles.css">
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the feed</a>
+
+  <header class="bar">
+    <div class="container bar__in">
+      <a class="wordmark" href="/">ACTIVITY ARCADE</a>
+      <p class="bar__note">One coin, one username, their public events up to 90 days back.</p>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <section class="counter" aria-labelledby="counter-head">
+      <h1 id="counter-head">INSERT USERNAME</h1>
+      <p class="lead">Type a GitHub username, press fetch, watch their public events land on the board.</p>
+
+      <form id="fetch-form" class="fetch" novalidate>
+        <label class="fetch__label" for="username">GitHub username</label>
+        <div class="fetch__row">
+          <input id="username" name="username" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+                 placeholder="Luffixos" maxlength="39" required pattern="[A-Za-z0-9\-]{1,39}" aria-describedby="fetch-help">
+          <button class="btn" type="submit" data-label="Fetch activity">Fetch activity</button>
+        </div>
+        <p class="fetch__help" id="fetch-help" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="board" aria-labelledby="board-head" aria-live="polite">
+      <h2 id="board-head" class="board__head">The board</h2>
+
+      <div id="result">
+        <div class="empty">
+          <p class="empty__title">No games on the board yet.</p>
+              <p class="empty__line">Every score comes from the public GitHub events feed, 90 days deep at most. Drop a username above and press fetch.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="close">
+    <div class="container close__in">
+      <p class="close__wordmark">ACTIVITY ARCADE</p>
+      <!-- <p class="close__line">Built in Go on the public GitHub events API. Without a token the API allows 60 lookups an hour; set <code>GITHUB_TOKEN</code> for 5,000. Lookups are cached for two minutes.</p> -->
+    </div>
+  </footer>
+
+  <script src="static/app.js"></script>
+</body>
+</html>
