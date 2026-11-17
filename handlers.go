@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"errors"
-	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -18,11 +16,6 @@ type Handler struct {
 	gh    *Client
 	cache *Cache
 }
-
-var tmpl = template.Must(template.ParseFS(templateFiles, "index.html"))
-
-//go:embed index.html
-var templateFiles embed.FS
 
 type apiError struct {
 	Error string `json:"error"`
@@ -37,13 +30,17 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	}
 }
 
-// index renders the shell; the feed itself is fetched client side.
+// index renders the shell or full board if username is provided.
 func (h *Handler) index(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := tmpl.ExecuteTemplate(w, "index.html", nil); err != nil {
-		log.Printf("template: %v", err)
-		http.Error(w, "template error", http.StatusInternalServerError)
+	username := strings.TrimSpace(r.URL.Query().Get("username"))
+	if username == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := Page("", EmptyBoard()).Render(r.Context(), w); err != nil {
+			log.Printf("render index: %v", err)
+		}
+		return
 	}
+	h.activity(w, r)
 }
 
 type apiUser struct {
@@ -62,17 +59,19 @@ type apiResponse struct {
 	Stats     Stats   `json:"stats"`
 }
 
-// activity answers GET /api/activity?username=<name>&page=<n>.
-// Page 1 is the newest 30 events; each further page reaches one page deeper
-// into GitHub's memory (it holds at most 10 pages, 90 days).
+// activity answers requests for user events, rendering either Templ components
+// (for HTMX and browser direct loads) or JSON (for API clients).
 func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.URL.Query().Get("username"))
+	filter := strings.TrimSpace(r.URL.Query().Get("filter"))
+	isHX := r.Header.Get("HX-Request") == "true"
+	isJSON := (strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/")) && !isHX
+
 	if !validUsername(username) {
-		writeJSON(w, http.StatusBadRequest, apiError{
-			Error: "That is not a valid GitHub username. Letters, numbers and hyphens only, up to 39 characters.",
-		})
+		h.handleErr(w, r, ErrBadUser, username)
 		return
 	}
+
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
 		if n, err := strconv.Atoi(p); err == nil && n >= 1 {
@@ -90,7 +89,7 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	if !cached {
 		u, err := h.gh.FetchProfile(ctx, username)
 		if err != nil {
-			h.apiErr(w, err, username)
+			h.handleErr(w, r, err, username)
 			return
 		}
 		h.cache.PutProfile(username, u)
@@ -101,7 +100,7 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	for p := pages + 1; p <= page && !done; p++ {
 		evs, err := h.gh.FetchEventsPage(ctx, username, p)
 		if err != nil {
-			h.apiErr(w, err, username)
+			h.handleErr(w, r, err, username)
 			return
 		}
 		h.cache.Append(username, evs, p)
@@ -112,51 +111,85 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	h.respond(w, user, events, pages, done)
-}
+	items, stats := BuildFeed(events)
+	hasMore := !done && pages < 10 && len(events) > 0
 
-func (h *Handler) apiErr(w http.ResponseWriter, err error, username string) {
-	switch {
-	case errors.Is(err, ErrBadUser):
-		writeJSON(w, http.StatusBadRequest, apiError{Error: err.Error() + " Letters, numbers and hyphens only, up to 39 characters."})
-	case errors.Is(err, ErrNotFound):
-		writeJSON(w, http.StatusNotFound, apiError{
-			Error: "No GitHub user is named " + username + ". Check the spelling and try again.",
+	if isJSON {
+		writeJSON(w, http.StatusOK, apiResponse{
+			User: apiUser{
+				Login:     user.Login,
+				Name:      user.Name,
+				AvatarURL: user.AvatarURL,
+				URL:       user.HTMLURL,
+			},
+			FetchedAt: time.Now().Format(time.RFC3339),
+			Page:      pages,
+			HasMore:   hasMore,
+			Events:    items,
+			Stats:     stats,
 		})
-	case errors.Is(err, ErrNetwork):
-		log.Printf("network: %v", err)
-		writeJSON(w, http.StatusBadGateway, apiError{
-			Error: "Could not reach GitHub. Check the connection and try again.",
-		})
-	default:
-		var rl *RateLimitError
-		if errors.As(err, &rl) {
-			writeJSON(w, http.StatusTooManyRequests, apiError{
-				Error: "GitHub's request budget is spent. It fills again after " + rl.Reset.Local().Format("3:04PM") + ".",
-				Reset: rl.Reset.Format(time.RFC3339),
-			})
-			return
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	boardComp := Board(user, stats, items, pages, hasMore, filter)
+	if isHX {
+		if err := boardComp.Render(r.Context(), w); err != nil {
+			log.Printf("render board fragment: %v", err)
 		}
-		log.Printf("github: %v", err)
-		writeJSON(w, http.StatusBadGateway, apiError{
-			Error: "GitHub answered something unexpected. Try again in a minute.",
-		})
+	} else {
+		if err := Page(username, boardComp).Render(r.Context(), w); err != nil {
+			log.Printf("render page: %v", err)
+		}
 	}
 }
 
-func (h *Handler) respond(w http.ResponseWriter, user *User, events []Event, pages int, done bool) {
-	items, stats := BuildFeed(events)
-	writeJSON(w, http.StatusOK, apiResponse{
-		User: apiUser{
-			Login:     user.Login,
-			Name:      user.Name,
-			AvatarURL: user.AvatarURL,
-			URL:       user.HTMLURL,
-		},
-		FetchedAt: time.Now().Format(time.RFC3339),
-		Page:      pages,
-		HasMore:   !done && pages < 10 && len(events) > 0,
-		Events:    items,
-		Stats:     stats,
-	})
+func (h *Handler) handleErr(w http.ResponseWriter, r *http.Request, err error, username string) {
+	isHX := r.Header.Get("HX-Request") == "true"
+	isJSON := (strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/")) && !isHX
+
+	var errMsg string
+	var status int
+
+	switch {
+	case errors.Is(err, ErrBadUser):
+		errMsg = "That is not a valid GitHub username. Letters, numbers and hyphens only, up to 39 characters."
+		status = http.StatusBadRequest
+	case errors.Is(err, ErrNotFound):
+		errMsg = "No GitHub user is named " + username + ". Check the spelling and try again."
+		status = http.StatusNotFound
+	case errors.Is(err, ErrNetwork):
+		errMsg = "Could not reach GitHub. Check the connection and try again."
+		status = http.StatusBadGateway
+	default:
+		var rl *RateLimitError
+		if errors.As(err, &rl) {
+			errMsg = "GitHub's request budget is spent. It fills again after " + rl.Reset.Local().Format("3:04PM") + "."
+			status = http.StatusTooManyRequests
+			if isJSON {
+				writeJSON(w, status, apiError{Error: errMsg, Reset: rl.Reset.Format(time.RFC3339)})
+				return
+			}
+		} else {
+			errMsg = "GitHub answered something unexpected. Try again in a minute."
+			status = http.StatusBadGateway
+		}
+	}
+
+	if isJSON {
+		writeJSON(w, status, apiError{Error: errMsg})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if isHX {
+		if err := ErrorBoard(errMsg).Render(r.Context(), w); err != nil {
+			log.Printf("render error fragment: %v", err)
+		}
+	} else {
+		w.WriteHeader(status)
+		if err := Page(username, ErrorBoard(errMsg)).Render(r.Context(), w); err != nil {
+			log.Printf("render error page: %v", err)
+		}
+	}
 }

@@ -1,0 +1,244 @@
+package main
+
+import (
+	"fmt"
+	"strconv"
+)
+
+templ Page(username string, board templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en" class="js">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Activity arcade: any GitHub username, their recent public events</title>
+			<meta name="description" content="Type a GitHub username, press fetch, and see their recent public events — pushes, stars, pull requests, issues and releases — up to GitHub's 90-day memory."/>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+			<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Chivo:wght@400;700;900&family=Silkscreen:wght@700&display=swap" rel="stylesheet"/>
+			<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23261a2e'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%23e2652c'/%3E%3C/svg%3E"/>
+			<link rel="stylesheet" href="/static/styles.css"/>
+			<script src="/static/htmx.min.js"></script>
+		</head>
+		<body>
+			<a class="skip" href="#main">Skip to the feed</a>
+			<header class="bar">
+				<div class="container bar__in">
+					<a class="wordmark" href="/">ACTIVITY ARCADE</a>
+					<p class="bar__note">One coin, one username, their public events up to 90 days back.</p>
+				</div>
+			</header>
+			<main id="main" class="container">
+				<section class="counter" aria-labelledby="counter-head">
+					<h1 id="counter-head">INSERT USERNAME</h1>
+					<p class="lead">Type a GitHub username, press fetch, watch their public events land on the board.</p>
+					<form
+						id="fetch-form"
+						class="fetch"
+						hx-get="/activity"
+						hx-target="#result"
+						hx-swap="innerHTML"
+						hx-indicator="#fetch-indicator"
+						hx-push-url="true"
+					>
+						<label class="fetch__label" for="username">GitHub username</label>
+						<div class="fetch__row">
+							<input
+								id="username"
+								name="username"
+								type="text"
+								value={ username }
+								autocomplete="off"
+								autocapitalize="off"
+								spellcheck="false"
+								placeholder="Luffixos"
+								maxlength="39"
+								required
+								pattern="[A-Za-z0-9\-]{1,39}"
+								aria-describedby="fetch-indicator"
+							/>
+							<button class="btn" type="submit" data-label="Fetch activity">Fetch activity</button>
+						</div>
+						<p class="fetch__help htmx-indicator" id="fetch-indicator" aria-live="polite">Fetching activity from GitHub…</p>
+					</form>
+				</section>
+				<section class="board" aria-labelledby="board-head" aria-live="polite">
+					<h2 id="board-head" class="board__head">The board</h2>
+					<div id="result">
+						@board
+					</div>
+				</section>
+			</main>
+			<footer class="close">
+				<div class="container close__in">
+					<p class="close__wordmark">ACTIVITY ARCADE</p>
+					<p class="close__line">Built in Go with Templ and HTMX on the public GitHub events API. Lookups are cached for two minutes.</p>
+				</div>
+			</footer>
+		</body>
+	</html>
+}
+
+templ EmptyBoard() {
+	<div class="empty">
+		<p class="empty__title">No games on the board yet.</p>
+		<p class="empty__line">Every score comes from the public GitHub events feed, 90 days deep at most. Drop a username above and press fetch.</p>
+	</div>
+}
+
+templ ErrorBoard(msg string) {
+	<div class="note is-error" role="status">
+		<p>{ msg }</p>
+		<p>Nothing on the board changed. Fix the problem above and fetch again.</p>
+	</div>
+}
+
+templ Board(user *User, stats Stats, items []Item, page int, hasMore bool, currentFilter string) {
+	@UserHeader(user)
+	@StatsBar(stats)
+	@FilterChips(items, currentFilter, user.Login, page)
+	@Feed(items, currentFilter)
+	@MoreButton(user.Login, page, hasMore, currentFilter)
+}
+
+templ UserHeader(u *User) {
+	if u != nil {
+		<div class="user">
+			<img class="user__avatar" src={ u.AvatarURL } width="56" height="56" alt=""/>
+			<p>
+				<a href={ templ.SafeURL(u.HTMLURL) } rel="noopener">
+					<span class="user__login">{ u.Login }</span>
+				</a>
+				if u.Name != "" && u.Name != u.Login {
+					<span class="user__name">{ u.Name }</span>
+				}
+			</p>
+		</div>
+	}
+}
+
+templ StatsBar(s Stats) {
+	<div class="stats" aria-label="Score line">
+		<div><b>{ strconv.Itoa(s.Events) }</b><span>events</span></div>
+		<div><b>{ strconv.Itoa(s.Pushes) }</b><span>pushes</span></div>
+		<div><b>{ strconv.Itoa(s.Stars) }</b><span>stars given</span></div>
+		<div><b>{ strconv.Itoa(s.Pulls) }</b><span>pull requests</span></div>
+		<div><b>{ strconv.Itoa(s.Issues) }</b><span>issues</span></div>
+		<div><b>{ strconv.Itoa(s.Repos) }</b><span>repos touched</span></div>
+	</div>
+}
+
+type chipInfo struct {
+	key   string
+	label string
+	count int
+}
+
+func getChips(items []Item) []chipInfo {
+	counts := map[string]int{"all": len(items)}
+	for _, it := range items {
+		counts[it.Category]++
+	}
+
+	order := []struct {
+		key   string
+		label string
+	}{
+		{"all", "All"},
+		{"push", "Pushes"},
+		{"star", "Stars"},
+		{"pull", "Pulls"},
+		{"issue", "Issues"},
+		{"release", "Releases"},
+		{"comment", "Comments"},
+		{"repo", "Repos"},
+		{"other", "Other"},
+	}
+
+	var res []chipInfo
+	for _, o := range order {
+		if c, ok := counts[o.key]; ok && (o.key == "all" || c > 0) {
+			res = append(res, chipInfo{key: o.key, label: o.label, count: c})
+		}
+	}
+	return res
+}
+
+templ FilterChips(items []Item, filter string, username string, page int) {
+	{{ chips := getChips(items) }}
+	if len(chips) > 0 {
+		<fieldset class="seg" id="chips">
+			<legend class="visually-hidden">Filter the feed by event type</legend>
+			for _, chip := range chips {
+				<input
+					type="radio"
+					name="cat"
+					id={ "cat-" + chip.key }
+					value={ chip.key }
+					checked?={ filter == chip.key || (filter == "" && chip.key == "all") }
+					hx-get={ fmt.Sprintf("/activity?username=%s&page=%d&filter=%s", username, page, chip.key) }
+					hx-target="#result"
+					hx-swap="innerHTML"
+				/>
+				<label for={ "cat-" + chip.key }>
+					{ chip.label } <span>{ strconv.Itoa(chip.count) }</span>
+				</label>
+			}
+		</fieldset>
+	}
+}
+
+templ Feed(items []Item, filter string) {
+	{{
+		var shown []Item
+		for _, it := range items {
+			if filter == "" || filter == "all" || it.Category == filter {
+				shown = append(shown, it)
+			}
+		}
+	}}
+	if len(shown) == 0 {
+		<div class="note">
+			<p>No events of this kind on the board.</p>
+			<p>Try the All chip, or fetch another username.</p>
+		</div>
+	} else {
+		<div class="feed">
+			for i, it := range shown {
+				<a
+					class={ "row", templ.KV("is-new", (filter == "" || filter == "all") && i == 0) }
+					href={ templ.SafeURL(it.URL) }
+					rel="noopener"
+				>
+					<span class="row__time">
+						{ it.Time }
+						<span class="row__date">{ it.Date }</span>
+					</span>
+					<span class="row__text">
+						<span class="row__verb">{ it.Sentence }</span>
+						<span class="row__repo">{ it.Repo }</span>
+					</span>
+				</a>
+			}
+		</div>
+	}
+}
+
+templ MoreButton(username string, page int, hasMore bool, filter string) {
+	if hasMore && (filter == "" || filter == "all") {
+		<div class="more">
+			<button
+				class="btn btn--quiet"
+				type="button"
+				id="more"
+				hx-get={ fmt.Sprintf("/activity?username=%s&page=%d&filter=all", username, page+1) }
+				hx-target="#result"
+				hx-swap="innerHTML"
+				hx-indicator="#more-loading"
+			>
+				Load 30 more
+			</button>
+			<span id="more-loading" class="htmx-indicator" style="margin-left: 1rem; color: var(--color-muted);">Loading…</span>
+		</div>
+	}
+}

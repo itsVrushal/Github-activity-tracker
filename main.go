@@ -53,6 +53,7 @@ func main() {
 	files := http.FileServerFS(static)
 
 	mux.HandleFunc("GET /{$}", h.index)
+	mux.HandleFunc("GET /activity", h.activity)
 	mux.HandleFunc("GET /api/activity", h.activity)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", files))
 

@@ -82,11 +82,11 @@ docker run -p 8080:8080 -e GITHUB_TOKEN=ghp_... activity-arcade
 ## Layout
 
 ```
-main.go        server, routes, graceful shutdown
-github.go      GitHub API client (profile + public events, error mapping)
-activity.go    event -> sentence mapping, categories, stats
-cache.go       two-minute TTL cache
-handlers.go    page and JSON handlers
-index.html     page shell
-static/        styles.css (Arcade theme), app.js (fetch, render, filters)
+main.go             server, routes, graceful shutdown, .env loader
+github.go           GitHub API client (profile + public events, error mapping)
+activity.go         event -> sentence mapping, categories, stats
+cache.go            two-minute TTL cache
+handlers.go         Templ page/fragment handlers and JSON endpoint
+templates.templ     type-safe Templ components (Page, Board, Stats, Chips, Feed)
+static/             styles.css (Arcade theme), htmx.min.js
 ```
