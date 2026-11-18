@@ -6,12 +6,12 @@ package main
 
 //lint:file-ignore SA4006 This context is only used if a nested component is present.
 
-import "github.com/a-h/templ"
-import templruntime "github.com/a-h/templ/runtime"
-
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/a-h/templ"
+	templruntime "github.com/a-h/templ/runtime"
 )
 
 func Page(username string, board templ.Component) templ.Component {
@@ -44,7 +44,7 @@ func Page(username string, board templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"Luffixos\" maxlength=\"39\" required pattern=\"[A-Za-z0-9\\-]{1,39}\" aria-describedby=\"fetch-indicator\"> <button class=\"btn\" type=\"submit\" data-label=\"Fetch activity\">Fetch activity</button></div><p class=\"fetch__help htmx-indicator\" id=\"fetch-indicator\" aria-live=\"polite\">Fetching activity from GitHub…</p></form></section><section class=\"board\" aria-labelledby=\"board-head\" aria-live=\"polite\"><h2 id=\"board-head\" class=\"board__head\">The board</h2><div id=\"result\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" placeholder=\"itsVrushal\" maxlength=\"39\" required pattern=\"[A-Za-z0-9\\-]{1,39}\" aria-describedby=\"fetch-indicator\"> <button class=\"btn\" type=\"submit\" data-label=\"Fetch activity\">Fetch activity</button></div><p class=\"fetch__help htmx-indicator\" id=\"fetch-indicator\" aria-live=\"polite\">Fetching activity from GitHub…</p></form></section><section class=\"board\" aria-labelledby=\"board-head\" aria-live=\"polite\"><h2 id=\"board-head\" class=\"board__head\">The board</h2><div id=\"result\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
