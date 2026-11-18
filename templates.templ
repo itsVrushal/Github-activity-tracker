@@ -93,8 +93,9 @@ templ ErrorBoard(msg string) {
 	</div>
 }
 
-templ Board(user *User, stats Stats, items []Item, page int, hasMore bool, currentFilter string) {
+templ Board(user *User, cal *ContributionCalendar, calNote string, stats Stats, items []Item, page int, hasMore bool, currentFilter string) {
 	@UserHeader(user)
+	@ContributionGrid(cal, calNote)
 	@StatsBar(stats)
 	@FilterChips(items, currentFilter, user.Login, page)
 	@Feed(items, currentFilter)
@@ -114,6 +115,57 @@ templ UserHeader(u *User) {
 				}
 			</p>
 		</div>
+	}
+}
+
+templ ContributionGrid(cal *ContributionCalendar, note string) {
+	if cal == nil {
+		<div class="cal__note" role="status">
+			<p>{ note }</p>
+		</div>
+	} else {
+		<section class="cal" aria-labelledby="cal-head">
+			<div class="cal__top">
+				<h3 id="cal-head" class="cal__title">Contribution grid</h3>
+				<p class="cal__total"><b>{ formatNumber(cal.Total) }</b> public contributions in the last year</p>
+			</div>
+			<div class="cal__scroll">
+				<div class="cal__months" aria-hidden="true">
+					for _, label := range cal.Months {
+						<span>{ label }</span>
+					}
+				</div>
+				<div class="cal__body">
+					<div class="cal__days" aria-hidden="true">
+						<span></span>
+						<span>Mon</span>
+						<span></span>
+						<span>Wed</span>
+						<span></span>
+						<span>Fri</span>
+						<span></span>
+					</div>
+					<div class="cal__grid" role="img" aria-label={ fmt.Sprintf("%d public contributions in the last year", cal.Total) }>
+						for _, cell := range cal.Cells {
+							if cell.Blank {
+								<span class="cal__cell is-blank" aria-hidden="true"></span>
+							} else {
+								<span class={ cell.Class() } title={ cell.Title }></span>
+							}
+						}
+					</div>
+				</div>
+			</div>
+			<div class="cal__legend" aria-hidden="true">
+				<span>Less</span>
+				<span class="cal__cell cal__cell--l0"></span>
+				<span class="cal__cell cal__cell--l1"></span>
+				<span class="cal__cell cal__cell--l2"></span>
+				<span class="cal__cell cal__cell--l3"></span>
+				<span class="cal__cell cal__cell--l4"></span>
+				<span>More</span>
+			</div>
+		</section>
 	}
 }
 

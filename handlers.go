@@ -13,8 +13,9 @@ import (
 
 // Handler serves the page and the JSON endpoint.
 type Handler struct {
-	gh    *Client
-	cache *Cache
+	gh       *Client
+	cache    *Cache
+	calCache *CalendarCache
 }
 
 type apiError struct {
@@ -85,6 +86,8 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
+	cal, calNote := h.contributions(ctx, username)
+
 	user, events, pages, done, cached := h.cache.Get(username)
 	if !cached {
 		u, err := h.gh.FetchProfile(ctx, username)
@@ -132,7 +135,7 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	boardComp := Board(user, stats, items, pages, hasMore, filter)
+	boardComp := Board(user, cal, calNote, stats, items, pages, hasMore, filter)
 	if isHX {
 		if err := boardComp.Render(r.Context(), w); err != nil {
 			log.Printf("render board fragment: %v", err)
@@ -142,6 +145,24 @@ func (h *Handler) activity(w http.ResponseWriter, r *http.Request) {
 			log.Printf("render page: %v", err)
 		}
 	}
+}
+
+// contributions loads the calendar from cache or GitHub. A failed lookup only
+// costs the chart: the activity feed still renders.
+func (h *Handler) contributions(ctx context.Context, username string) (*ContributionCalendar, string) {
+	if cal, ok := h.calCache.Get(username); ok {
+		return cal, ""
+	}
+	cal, err := h.gh.FetchContributions(ctx, username)
+	if err != nil {
+		log.Printf("contribution calendar for %s: %v", username, err)
+		return nil, "The contribution graph is unavailable right now. The activity feed below is unchanged."
+	}
+	if cal == nil {
+		return nil, "No public contributions to graph for this user."
+	}
+	h.calCache.Put(username, cal)
+	return cal, ""
 }
 
 func (h *Handler) handleErr(w http.ResponseWriter, r *http.Request, err error, username string) {

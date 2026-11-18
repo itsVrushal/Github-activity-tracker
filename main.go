@@ -44,7 +44,11 @@ func main() {
 	mux := http.NewServeMux()
 
 	client := NewGitHubClient(os.Getenv("GITHUB_TOKEN"))
-	h := &Handler{gh: client, cache: NewCache(2 * time.Minute)}
+	h := &Handler{
+		gh:       client,
+		cache:    NewCache(2 * time.Minute),
+		calCache: NewCalendarCache(time.Hour),
+	}
 
 	static, err := fs.Sub(staticFiles, "static")
 	if err != nil {

@@ -2,12 +2,16 @@
 
 A Go webapp that fetches a GitHub user's recent public activity and displays it
 as a feed: type a username, press fetch, and see their last 30 public events
-with a score line and filters by event type.
+with a score line and filters by event type. It also draws the contribution
+grid from their GitHub profile — a full year of daily squares in the Arcade
+theme's ember orange.
 
-Built on the [public GitHub events API](https://docs.github.com/en/rest/activity/events)
-with nothing but the standard library. The UI is an app screen in the Arcade
-theme (aubergine CRT ground, Bungee display, Silkscreen figures, ember and acid
-inks).
+The feed uses the [public GitHub events API](https://docs.github.com/en/rest/activity/events);
+the contribution grid uses GitHub's public contributions graph
+(`github.com/users/<user>/contributions`), the same one a public profile shows.
+Both use nothing but the Go standard library.
+The UI is an app screen in the Arcade theme (aubergine CRT ground, Bungee
+display, Silkscreen figures, ember and acid inks).
 
 ## Run
 
@@ -34,6 +38,16 @@ GITHUB_TOKEN=ghp_yourtokenhere ./arcade-tracker
 
 A fine-grained token with **no** repository permissions is enough; the public
 events endpoint only needs read access to public data.
+
+## Contribution grid
+
+The year-long grid shows for any public username, with or without a token
+(`GITHUB_TOKEN` only raises the REST API rate-limit budget). The grid is
+cached for an hour (the feed for two minutes), and each square has its date
+and count in a tooltip.
+
+GitHub only exposes **public** contributions for another user, so the grid
+matches their public profile, not private activity.
 
 ## What it maps
 
@@ -83,10 +97,11 @@ docker run -p 8080:8080 -e GITHUB_TOKEN=ghp_... activity-arcade
 
 ```
 main.go             server, routes, graceful shutdown, .env loader
-github.go           GitHub API client (profile + public events, error mapping)
+github.go           GitHub REST client (profile + public events, error mapping)
+contributions.go    GraphQL contribution calendar, grid layout, formatting
 activity.go         event -> sentence mapping, categories, stats
-cache.go            two-minute TTL cache
+cache.go            two-minute feed cache + one-hour calendar cache
 handlers.go         Templ page/fragment handlers and JSON endpoint
-templates.templ     type-safe Templ components (Page, Board, Stats, Chips, Feed)
+templates.templ     type-safe Templ components (Page, Board, Grid, Stats, Chips, Feed)
 static/             styles.css (Arcade theme), htmx.min.js
 ```

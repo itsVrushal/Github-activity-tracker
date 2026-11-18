@@ -69,3 +69,40 @@ func (c *Cache) Append(username string, events []Event, page int) {
 	e.expires = time.Now().Add(c.ttl)
 	c.data[username] = e
 }
+
+// CalendarCache keeps the year-long contribution graph longer than the feed:
+// one GraphQL call per user per hour is plenty for a square that changes once
+// a day.
+type CalendarCache struct {
+	mu   sync.Mutex
+	ttl  time.Duration
+	data map[string]calendarEntry
+}
+
+type calendarEntry struct {
+	calendar *ContributionCalendar
+	expires  time.Time
+}
+
+// NewCalendarCache builds a cache with the given time to live.
+func NewCalendarCache(ttl time.Duration) *CalendarCache {
+	return &CalendarCache{ttl: ttl, data: map[string]calendarEntry{}}
+}
+
+// Get returns the cached calendar, if it is still fresh.
+func (c *CalendarCache) Get(username string) (*ContributionCalendar, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.data[username]
+	if !ok || time.Now().After(e.expires) {
+		return nil, false
+	}
+	return e.calendar, true
+}
+
+// Put stores a freshly fetched calendar.
+func (c *CalendarCache) Put(username string, cal *ContributionCalendar) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[username] = calendarEntry{calendar: cal, expires: time.Now().Add(c.ttl)}
+}

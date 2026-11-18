@@ -30,9 +30,10 @@ func (e *RateLimitError) Error() string {
 	return "GitHub rate limit reached"
 }
 
-// Client talks to the public GitHub REST API.
+// Client talks to the public GitHub API and website.
 type Client struct {
-	base   *url.URL
+	base   *url.URL // api.github.com
+	web    *url.URL // github.com (public contribution graph)
 	http   *http.Client
 	token  string
 	events chan<- struct{}
@@ -42,8 +43,10 @@ type Client struct {
 // budget of 60 requests per hour per IP.
 func NewGitHubClient(token string) *Client {
 	base, _ := url.Parse("https://api.github.com/")
+	web, _ := url.Parse("https://github.com/")
 	return &Client{
 		base:  base,
+		web:   web,
 		http:  &http.Client{Timeout: 15 * time.Second},
 		token: token,
 	}
