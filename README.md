@@ -1,5 +1,11 @@
 # Activity Arcade
 
+> **Live Demo:** [githubactivitytracker.vercel.app](https://githubactivitytracker.vercel.app/)
+
+<p align="center">
+  <img src="assets/demo.gif" alt="Activity Arcade Demo" width="100%">
+</p>
+
 A Go webapp that fetches a GitHub user's recent public activity and displays it
 as a feed: type a username, press fetch, and see their last 30 public events
 with a score line and filters by event type. It also draws the contribution
@@ -105,3 +111,8 @@ handlers.go         Templ page/fragment handlers and JSON endpoint
 templates.templ     type-safe Templ components (Page, Board, Grid, Stats, Chips, Feed)
 static/             styles.css (Arcade theme), htmx.min.js
 ```
+
+## Author
+
+Built with Go + HTMX by [Vrushal Patil](https://vrushalpatil.vercel.app) · [Source Code](https://github.com/itsVrushal/Github-activity-tracker)
+
